@@ -1,7 +1,5 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
-import re
 from data_cleaning import validate_dataframe
 from comprenhensive_dup_cleansing import dups_manage
 from full_data_enrichment import enrich_full_data
