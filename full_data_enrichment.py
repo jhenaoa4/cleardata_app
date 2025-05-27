@@ -8,7 +8,6 @@ import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 from typing import List, Optional
-from tqdm import tqdm
 from company_search import search_company
 
 class DataEnrichmentSystem:
