@@ -2,8 +2,7 @@ import re
 import pandas as pd
 import numpy as np
 
-def validate_dataframe(df, address_col='Address', state_col='State', phone_col='Phone number',
-                      email_col='Email', contact_name_col='Contact Name', contact_email_col='Contact Email'):
+def validate_dataframe(df, rename_map, clean_email, clean_phone, clean_contact_phone, clean_contact_email, clean_url, clean_state, clean_address):
     """
     Validate a DataFrame with specific columns and return a clean DataFrame
     with only valid records. Standardizes phone numbers to +1 format.
@@ -19,17 +18,7 @@ def validate_dataframe(df, address_col='Address', state_col='State', phone_col='
     - URL: Should be a valid URL if present
     """
     # Rename columns for easier access
-    # Rename columns only if they exist in the DataFrame
-    rename_map = {
-        address_col: 'Address',
-        state_col: 'State',
-        phone_col: 'Phone number',
-        email_col: 'Email',
-        contact_name_col: 'Contact Name',
-        contact_email_col: 'Contact Email',
-        'Company Name': 'Company Name',
-        'url': 'url'
-    }
+    
     # Only include columns that are present in df
     rename_map = {k: v for k, v in rename_map.items() if k in df.columns}
     df = df.rename(columns=rename_map)
@@ -125,18 +114,18 @@ def validate_dataframe(df, address_col='Address', state_col='State', phone_col='
         url_pattern = r'^(https?:\/\/)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)$'
         return bool(re.match(url_pattern, x.strip()))
     
-    if 'Address' in df.columns:
+    if 'Address' in df.columns and clean_address:
         mask = df['Address'].apply(validate_address)
         valid_rows &= mask
         # Mark invalid addresses
         clean_df.loc[~mask, 'Address'] = np.nan
     
-    if 'State' in df.columns:
+    if 'State' in df.columns and clean_state:
         valid_rows &= df['State'].apply(validate_state)
     
-    if 'Phone number' in df.columns:
+    if 'Company phone' in df.columns and clean_phone:
         # Apply the phone validation and standardization
-        phone_results = df['Phone number'].apply(validate_and_standardize_phone)
+        phone_results = df['Company phone'].apply(validate_and_standardize_phone)
         
         # Extract validation results and standardized numbers
         phone_valid = phone_results.apply(lambda x: x[0])
@@ -146,18 +135,35 @@ def validate_dataframe(df, address_col='Address', state_col='State', phone_col='
         valid_rows &= phone_valid
         
         # Update the phone numbers with standardized format
-        clean_df.loc[phone_valid, 'Phone number'] = standardized_phones[phone_valid]
-        clean_df.loc[~phone_valid, 'Phone number'] = np.nan
+        clean_df.loc[phone_valid, 'Company phone'] = standardized_phones[phone_valid]
+        clean_df.loc[~phone_valid, 'Company phone'] = np.nan
     
-    if 'Email' in df.columns:
+    if 'Contact Phone' in df.columns and clean_contact_phone:
+        # Apply the phone validation and standardization
+        phone_results = df['Contact Phone'].apply(validate_and_standardize_phone)
+        
+        # Extract validation results and standardized numbers
+        phone_valid = phone_results.apply(lambda x: x[0])
+        standardized_phones = phone_results.apply(lambda x: x[1] if x[0] else np.nan)
+        
+        # Update the valid_rows mask
+        valid_rows &= phone_valid
+        
+        # Update the phone numbers with standardized format
+        clean_df.loc[phone_valid, 'Contact Phone'] = standardized_phones[phone_valid]
+        clean_df.loc[~phone_valid, 'Contact Phone'] = np.nan
+    
+    if 'Email' in df.columns and clean_email:
         valid_rows &= df['Email'].apply(validate_email)
     
-    if 'Contact Email' in df.columns:
+    if 'Contact Email' in df.columns and clean_contact_email:
         valid_rows &= df['Contact Email'].apply(validate_email)
     
-    if 'url' in df.columns:
+    if 'url' in df.columns and clean_url:
         valid_rows &= df['url'].apply(validate_url)
-    
+    # Rename back
+    rename_map = {v: k for k, v in rename_map.items()}
+    clean_df = clean_df.rename(columns=rename_map)
     # Return only valid rows
     return clean_df[valid_rows]
 

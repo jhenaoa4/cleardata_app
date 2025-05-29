@@ -1,5 +1,4 @@
 import pandas as pd
-import numpy as np
 from difflib import SequenceMatcher
 import re
 from itertools import combinations
@@ -465,16 +464,15 @@ def merge_duplicates(df, duplicates_df, column_config, merge_strategy=None):
     # Return the deduplicated dataframe10
     return result_df.loc[indices_to_keep].reset_index(drop=True)
 
-def dups_manage(df, company_name_col, contact_name_col, state_col = None, website_col= None):
+def dups_manage(df, id_column, company_name_col, contact_name_col, website_col):
     # df = pd.read_excel('initial_data/8. Master List SepOct.xlsx')#.head(1000)
-    idx = 'Contact ID'
-    df.set_index(idx, inplace=True)
+
+    df.set_index(id_column, inplace=True)
     
     # Define column types for similarity calculation
     column_config = {
         'Company Name': company_name_col,
-        'Website': state_col,
-        'State': website_col,
+        'Website': website_col,
         'Contact name': contact_name_col
     }
     
@@ -482,14 +480,12 @@ def dups_manage(df, company_name_col, contact_name_col, state_col = None, websit
     weights = {
         'company_name': 0.25,
         'website_url': 0.35,
-        'address': 0.15,
-        'state': 0.15,
         'contact_name': 0.10
     }
     
     # Find duplicates with 70% similarity threshold
     duplicates = find_duplicates(df, column_config, threshold=0.8, weights=weights)
-    duplicates[['company1', 'company2', 'similarity_score']].to_excel('final_data/8_Master_List_duplicates.xlsx', index=False)
+    duplicates[['company1', 'company2', 'similarity_score']]#.to_excel('final_data/8_Master_List_duplicates.xlsx', index=False)
     
     # Print results
     if not duplicates.empty:
@@ -515,13 +511,12 @@ def dups_manage(df, company_name_col, contact_name_col, state_col = None, websit
             'Phone': 'first'
         }
         
-        merged_df = merge_duplicates(df, duplicates, column_config, custom_strategy).drop_duplicates()
+        merged_df = merge_duplicates(df, duplicates, column_config, custom_strategy).drop_duplicates(subset=[company_name_col, contact_name_col, website_col], keep='first')
 
-        
-        print("\nOriginal dataframe had", len(df), "records")
-        print("After deduplication:", len(merged_df), "records")
         # Save the merged dataframe to a CSV file
-        merged_df.to_excel('final_data/8_Master_List_deduplicated.xlsx', index=False)
+        # merged_df.to_excel('final_data/8_Master_List_deduplicated.xlsx', index=False)
+        return merged_df, len(df), len(merged_df)
     else:
+        return df, len(df), len(df)
         print("No duplicates found with the given threshold.")
     

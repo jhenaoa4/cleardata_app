@@ -10,7 +10,11 @@ from typing import List, Optional
 from company_search import search_company
 
 class DataEnrichmentSystem:
-    def __init__(self, pms_list_file: str = 'Full enrichment/PMS_names.csv', gateway_list_file: str = 'Full enrichment/gateway_names.csv'):
+    def __init__(self, company_name, phone_email= False, pms_gateway = False, pms_list_file: str = 'PMS_names.csv', gateway_list_file: str = 'gateway_names.csv'):
+        self.company_name = company_name
+        self.phone_email = phone_email
+        self.pms_gateway = pms_gateway
+
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         }
@@ -538,37 +542,35 @@ class DataEnrichmentSystem:
             
             self.soup = ''
             self.soup = self.fetch_and_parse_url(url)
-            phones, emails = self.scrape_url(url)
-
             alternative_phone_number_1 = ''
             alternative_phone_number_2 = ''
-            if len(phones) > 0:
-                alternative_phone_number_1 = self.format_number(phones[0])
-                if len(phones) > 1:
-                    alternative_phone_number_2 = self.format_number(phones[1])
-                                    
-            
             alternative_email_1 = ''
             alternative_email_2 = ''
-            if len(emails) > 0:
-                alternative_email_1 = emails[0]
-                if len(emails) > 1:
-                    alternative_email_2 = emails[1]
+            if self.phone_email:
+                phones, emails = self.scrape_url(url)                
+                if len(phones) > 0:
+                    alternative_phone_number_1 = self.format_number(phones[0])
+                    if len(phones) > 1:
+                        alternative_phone_number_2 = self.format_number(phones[1])
+                                                
+                if len(emails) > 0:
+                    alternative_email_1 = emails[0]
+                    if len(emails) > 1:
+                        alternative_email_2 = emails[1]
                 
 
             # PMS detection
-            pms_systems = self.analyze_website(url)
-            if len(pms_systems) > 0:
-                pms = pms_systems[0]
-            else:
-                pms = ''
-
-            # Gateway detection
-            gateways = self.analyze_checkout_flow(url)
-            if len(gateways) > 0:
-                gt = gateways[0]
-            else:
-                gt = ''
+            pms = ''
+            gt = ''
+            if self.pms_gateway:
+                pms_systems = self.analyze_website(url)
+                if len(pms_systems) > 0:
+                    pms = pms_systems[0]
+                    
+                # Gateway detection
+                gateways = self.analyze_checkout_flow(url)
+                if len(gateways) > 0:
+                    gt = gateways[0]
 
             enriched_df.append({
                 'url': url_0,
@@ -576,21 +578,21 @@ class DataEnrichmentSystem:
                 'alternative phone_number_2': alternative_phone_number_2,
                 'alternative email_1': alternative_email_1,
                 'alternative email_2': alternative_email_2,
-                'validated_phone_numbers': ' - '.join(phones),
-                'validated_emails': ' - '.join(emails),
+                # 'validated_phone_numbers': ' - '.join(phones),
+                # 'validated_emails': ' - '.join(emails),
                 'Detected PMS': pms,
-                # 'Detected Gateway': gt
+                'Detected Gateway': gt
                 })
             
         i += 1
 
         return pd.DataFrame(enriched_df) 
     
-def enrich_full_data(df_companies, url_column: str, company_column: str, progress_bar):
+def enrich_full_data(df_companies, company_name: str, url_column: str, progress_bar, phone_email= False, pms_gateway = False):
 
     for index, row in df_companies.iterrows():
         if pd.isna(row[url_column]):
-            company = row[company_column]
+            company = row[company_name]
             # url_search = CompanySearch()
             urls = search_company(company)
             if urls:
@@ -598,7 +600,14 @@ def enrich_full_data(df_companies, url_column: str, company_column: str, progres
     
     df_companies.drop_duplicates(subset=[url_column], inplace=True)
     urls = df_companies[url_column].astype(str)
-    detector = DataEnrichmentSystem()
+    detector = DataEnrichmentSystem(company_name)
     enriched_df = detector.full_web_scrapping(urls, progress_bar)
+    if not pms_gateway:
+        enriched_df = enriched_df.drop(columns=['Detected PMS','Detected Gateway'], errors='ignore')
+    if not phone_email:
+        enriched_df = enriched_df.drop(columns=['alternative phone_number_1', 'alternative phone_number_2', 'alternative email_1', 'alternative email_2'], errors='ignore')
+    enriched_df.rename(columns={'url':'url enriched'}, inplace=True)
+    enriched_df = pd.merge(df_companies, enriched_df, left_on=url_column, right_on='url enriched', how='left')
+    enriched_df.drop(columns=['url enriched'], inplace=True, errors='ignore')
     return enriched_df
     # enriched_df.to_csv(path_output, index = False)
