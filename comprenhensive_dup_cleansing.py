@@ -475,6 +475,8 @@ def dups_manage(df, id_column, company_name_col, contact_name_col, website_col):
         'Website': website_col,
         'Contact name': contact_name_col
     }
+
+    column_config = {k: v for k, v in column_config.items() if v}
     
     # Custom weights (optional)
     weights = {

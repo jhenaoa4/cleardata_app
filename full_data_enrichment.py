@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 from typing import List, Optional
 from company_search import search_company
+import streamlit as st
 
 class DataEnrichmentSystem:
     def __init__(self, company_name, phone_email= False, pms_gateway = False, pms_list_file: str = 'PMS_names.csv', gateway_list_file: str = 'gateway_names.csv'):
@@ -526,14 +527,15 @@ class DataEnrichmentSystem:
         else:
             return '+' + digits
     
-    def full_web_scrapping(self, urls, progress_bar):
+    def full_web_scrapping(self, urls):
 
         """Scrape multiple URLs for contact information"""
         enriched_df = []
-        i = 0
-        for url_0 in urls:
-            progress_bar.progress((i + 1) / len(urls))
-            time.sleep(2)
+        progress_bar = st.progress(0)
+        for i, url_0 in enumerate(urls):
+            progress_percentage = (i + 1) / len(urls)
+            progress_bar.progress(progress_percentage)
+            time.sleep(1)
             # Contact validation web scrapping
             if not url_0.startswith(('http://', 'https://')):
                 url = 'https://' + url_0
@@ -584,13 +586,15 @@ class DataEnrichmentSystem:
                 'Detected Gateway': gt
                 })
             
-        i += 1
+        progress_bar.progress(100)
 
         return pd.DataFrame(enriched_df) 
     
-def enrich_full_data(df_companies, company_name: str, url_column: str, progress_bar, phone_email= False, pms_gateway = False):
-
+def enrich_full_data(df_companies, company_name: str, url_column: str, phone_email= False, pms_gateway = False):
+    progress_bar_url = st.progress(0)
+    status_text = st.empty()
     for index, row in df_companies.iterrows():
+        progress_bar_url.progress((index + 1) / len(df_companies))
         if pd.isna(row[url_column]):
             company = row[company_name]
             # url_search = CompanySearch()
@@ -601,7 +605,7 @@ def enrich_full_data(df_companies, company_name: str, url_column: str, progress_
     df_companies.drop_duplicates(subset=[url_column], inplace=True)
     urls = df_companies[url_column].astype(str)
     detector = DataEnrichmentSystem(company_name)
-    enriched_df = detector.full_web_scrapping(urls, progress_bar)
+    enriched_df = detector.full_web_scrapping(urls)
     if not pms_gateway:
         enriched_df = enriched_df.drop(columns=['Detected PMS','Detected Gateway'], errors='ignore')
     if not phone_email:

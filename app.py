@@ -35,9 +35,9 @@ def main():
         st.write("Note: Your file may not include all the columns listed below — only fill in the ones that are present.")
         col1, col2 = st.columns([2, 2])
         with col1:  
-            id_column = st.text_input("ID Column*", "id")
+            id_column = st.text_input("ID Column", "id")
             if id_column not in df.columns:
-                st.error(f"Column '{id_column}' not found in the uploaded file. Please check the column names.")
+                st.warning(f"Column '{id_column}' not found in the uploaded file. Please check the column names, or a default id will be set.")
             company_name = st.text_input("Company Name Column*", "Company")
             if company_name not in df.columns:
                 st.error(f"Column '{company_name}' not found in the uploaded file. Please check the column names.")
@@ -107,6 +107,14 @@ def main():
         # Perform cleaning when button is pressed
         
         if st.button("Refine Data"):
+            if company_name not in df.columns:
+                st.error("Company Name Column are required fields. Please check the column names.")
+                return
+            if id_column not in df.columns:
+                st.warning("Warning: ID Column not found. Setting default 'id' column.")
+                df['id'] = range(1, len(df) + 1)
+                id_column = 'id'
+            
             rename_map = {
                     address_col: 'Address',
                     state_col: 'State',
@@ -123,16 +131,19 @@ def main():
             if phone_email or pms_gateway:
                 # Perform data enrichment
                 st.write("Enriching data, this may take a while depending on the dataset size...")
-                progress_bar = st.progress(0)
+                
+                if not url_column:
+                    df['url'] = pd.NA
+                    url_column = 'url'
                 if phone_email:
                     if pms_gateway:
-                        df = enrich_full_data(df, company_name, url_column,progress_bar, phone_email= True, pms_gateway = True)
+                        df = enrich_full_data(df, company_name, url_column, phone_email= True, pms_gateway = True)
                     else:
-                        df = enrich_full_data(df, company_name, url_column,progress_bar, phone_email= True)
+                        df = enrich_full_data(df, company_name, url_column, phone_email= True)
                 else:
                     if pms_gateway:
-                        df = enrich_full_data(df, company_name, url_column, progress_bar, pms_gateway = True)
-                progress_bar.progress(100)
+                        df = enrich_full_data(df, company_name, url_column, pms_gateway = True)
+                
                 st.success("Data Enrichment Completed.")
 
             if merge_duplicates:
@@ -147,14 +158,14 @@ def main():
                 st.success("Merged with another dataset.")
             
             # Display the cleaned data
-            st.write("Final Cleaned Data Sample:")
+            st.write("Final Refined Data Sample:")
             st.dataframe(df.head(10))
             # Download option
             csv = df.to_csv(index=False)
             st.download_button(
-                label="Download Cleaned CSV",
+                label="Download Refined CSV",
                 data=csv,
-                file_name='cleaned_data.csv',
+                file_name='REFINED_'+uploaded_file.name.split('.')[0]+'.csv',
                 mime='text/csv'
             )
 
