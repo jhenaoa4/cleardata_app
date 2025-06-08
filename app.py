@@ -3,6 +3,7 @@ import pandas as pd
 from data_cleaning import validate_dataframe
 from comprenhensive_dup_cleansing import dups_manage
 from full_data_enrichment import enrich_full_data
+from dups_merge_between_lists import cross_dataframe_duplicate_manager
 
 def main():
     col1, col2 = st.columns([1, 3])
@@ -11,7 +12,7 @@ def main():
     with col2:
         st.title('CLEARdata:')
         st.header('Data Cleansing, Enrichment Automated Refinement')
-    st.write("This app helps you clean, deduplicate and enrich your data efficiently.")
+    st.write("🪄This app helps you clean, deduplicate and enrich your data efficiently.")
     
     # File uploader
     st.header("1. Upload your file")
@@ -31,8 +32,8 @@ def main():
             return
         # Enter the column names
         st.header("2. Enter Column Names")
-        st.write("Please enter the exact names of the columns as they appear in your Excel file for the following fields.")
-        st.write("Note: Your file may not include all the columns listed below — only fill in the ones that are present.")
+        st.write("⚙️Please enter the exact names of the columns as they appear in your Excel file for the following fields.")
+        st.write("⚡Note: Your file may not include all the columns listed below — only fill in the ones that are present.")
         col1, col2 = st.columns([2, 2])
         with col1:  
             id_column = st.text_input("ID Column", "id")
@@ -64,7 +65,7 @@ def main():
             
         # Refinement options
         st.header("3. Data Refinement Options")
-        st.subheader("Data Cleaning")
+        st.subheader("🧼Data Cleaning")
         st.write("Data cleaning will remove invalid data based on the selected columns.")
         
         clean_email = st.checkbox("Clean Company Email columns")
@@ -86,7 +87,7 @@ def main():
                 st.error(f"Column '{address_col}' not found in the uploaded file. Please check the column names.")
             
         st.divider()
-        st.subheader("Data Enrichment")
+        st.subheader("✨Data Enrichment")
         st.write("Enriching algorithm will add information scrapped from the company website to the list.")
         phone_email = st.checkbox("Phone and Email Enrichment")
         pms_gateway = st.checkbox("PMS and Gateway Enrichment")
@@ -94,19 +95,40 @@ def main():
 
         # Duplicate merging
         st.divider()
-        st.subheader("Duplicate Management")
+        st.subheader("👯‍♀️Duplicate Management")
         merge_duplicates = st.checkbox("Manage Duplicates within the list")
 
         # Duplicate merge with another dataset
-        merge_with_another = st.checkbox("Merge dups with Another Dataset")
+        merge_with_another = st.checkbox("Merge dups with Hubspot Contacts or Companies")
         if merge_with_another:
-            another_file = st.file_uploader("Upload another CSV file to merge dups with", type="csv")
+            st.write("📥Please export from HubSpot records before proceeding, either **Contacts** or **Companies** depending on your case.")
+            another_file = st.file_uploader("Upload the CSV file you exported from HubSpot")
+           
+            st.write(
+                "🔄This tool will merge your original list with the HubSpot export.\n\n"
+                "🔍If there are duplicate records, the values from the HubSpot file will be used.\n\n"
+                "✅When you upload the merged list back to HubSpot, make sure to choose the option **'Create and update records'**. This ensures HubSpot updates existing entries instead of creating duplicates."
+            )
             if another_file is not None:
-                df2 = pd.read_csv(another_file)
+                if another_file.name.endswith('.csv'):
+                    df2 = pd.read_csv(another_file)
+                else:
+                    # Sheet name
+                    another_sheet_name = st.text_input("Please enter the Sheet Name for the HubSpot file", "Sheet1")
+                    df2 = pd.read_excel(another_file, sheet_name=another_sheet_name)
+                if 'Company Name' not in df2.columns:
+                    st.error("Company Name Column is a required field. Please check the file is complete.")
+                        
+                if 'Company Domain Name' not in df2.columns:
+                    st.error("Company Domain Name Column is a required field. Please check the file is complete.")
+                
+                if 'Contact Full Name' not in df2.columns:
+                    st.error("Contact Full Name Column is a required field. Please check the file is complete.")
         
         # Perform cleaning when button is pressed
-        
-        if st.button("Refine Data"):
+        if "is_processing" not in st.session_state:
+            st.session_state.is_processing = False
+        if st.button("Refine Data", disabled=st.session_state.is_processing,help="If the button is disabled, please reload the webpage."):
             if company_name not in df.columns:
                 st.error("Company Name Column are required fields. Please check the column names.")
                 return
@@ -114,7 +136,8 @@ def main():
                 st.warning("Warning: ID Column not found. Setting default 'id' column.")
                 df['id'] = range(1, len(df) + 1)
                 id_column = 'id'
-            
+
+            st.session_state.is_processing = True
             rename_map = {
                     address_col: 'Address',
                     state_col: 'State',
@@ -126,11 +149,11 @@ def main():
             }
             if clean_email or clean_phone or clean_contact_phone or clean_url or clean_state or clean_address or clean_contact_email:
                 df = validate_dataframe(df, rename_map, clean_email, clean_phone, clean_contact_phone, clean_contact_email, clean_url, clean_state, clean_address)
-            st.success("Data Cleaning Completed.")
+            st.success("✨Data Cleaning Completed.")
 
             if phone_email or pms_gateway:
                 # Perform data enrichment
-                st.write("Enriching data, this may take a while depending on the dataset size...")
+                st.write("⏳Enriching data, this may take a while depending on the dataset size...")
                 
                 if not url_column:
                     df['url'] = pd.NA
@@ -144,18 +167,35 @@ def main():
                     if pms_gateway:
                         df = enrich_full_data(df, company_name, url_column, pms_gateway = True)
                 
-                st.success("Data Enrichment Completed.")
+                st.success("✨Data Enrichment Completed.")
 
             if merge_duplicates:
                 # Merge duplicates
                 df, original_len, merged_len = dups_manage(df, id_column, company_name, contact_name, url_column)
-                st.success("Duplicate Management Completed. Original length: {}, After dedup length: {}, Merged amount: {}".format(original_len, merged_len, original_len-merged_len))
+                st.success("✨Duplicate Management Completed. Original length: {}, After dedup length: {}, Merged amount: {}".format(original_len, merged_len, original_len-merged_len))
 
             if merge_with_another and another_file is not None:
                 # Merge with another dataset
-                df2 = pd.read_csv(another_file)
-                df = merge_with_another(df, df2, company_name, contact_name, contact_email_col, company_email_col, company_phone_col, contact_phone_col)
-                st.success("Merged with another dataset.")
+                # df2 = pd.read_excel(another_file)
+                if 'First Name' in df2.columns and 'Last Name' in df2.columns:
+                    df2['Contact Full Name'] = df2['First Name'] + ' ' + df2['Last Name']
+                else:
+                    df2['Contact Full Name'] = pd.NA
+
+                if 'Company Domain Name' not in df2.columns:
+                    df2['Company Domain Name'] = pd.NA
+
+                rename_cols = {}
+                if company_name in df.columns:
+                    rename_cols[company_name] = 'Company Name'
+                if url_column in df.columns:
+                    rename_cols[url_column] = 'Company Domain Name'
+                if contact_name and contact_name in df.columns:
+                    rename_cols[contact_name] = 'Contact Full Name'
+                if rename_cols:
+                    df.rename(columns=rename_cols, inplace=True)
+                df, duplicates, stats = cross_dataframe_duplicate_manager(df, df2,threshold=0.7)
+                st.success("✨Merged with another dataset.")
             
             # Display the cleaned data
             st.write("Final Refined Data Sample:")
@@ -168,6 +208,7 @@ def main():
                 file_name='REFINED_'+uploaded_file.name.split('.')[0]+'.csv',
                 mime='text/csv'
             )
+            st.session_state.is_processing = False
 
 if __name__ == '__main__':
     main()
